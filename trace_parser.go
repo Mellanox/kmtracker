@@ -27,6 +27,7 @@ type MemEntryTracker struct {
 	size    uint64
 	count   uint64
 	entries []*MemEntry
+	ptr_map map[uint64][]*MemEntry
 	name    string
 }
 
@@ -157,6 +158,11 @@ func parseLine(line string, index int, search_pid int32) (*MemEntry, error) {
 	memEntry.call_site = addr
 	memEntry.ptr = ptr
 	memEntry.index = index
+	/*
+	if ptr != 0 {
+		fmt.Printf("type = %v ptr = 0x%x\n ", memEntry.call_type, ptr)
+	}
+	*/
 
 	if memEntry.call_type == "kmalloc" ||
 		memEntry.call_type == "kmalloc_node" ||
@@ -177,16 +183,80 @@ func parseLine(line string, index int, search_pid int32) (*MemEntry, error) {
 	return memEntry, nil
 }
 
+func IntMemTracker(tracker *MemEntryTracker, name string) {
+	tracker.name = name
+	tracker.ptr_map = make(map[uint64][]*MemEntry)
+}
+
+func GetLenForKmallocAddr(memEntries *MemEntrieByType,
+	mallocTracker *MemEntryTracker, memEntry *MemEntry) uint64 {
+	var malloc_len uint64
+	var i int
+
+	if len(mallocTracker.ptr_map[memEntry.ptr]) == 0 {
+		return 0
+	}
+
+	for i = 0; i < len(mallocTracker.ptr_map[memEntry.ptr]); i++ {
+		malloc_len = mallocTracker.ptr_map[memEntry.ptr][i].length
+		break
+	}
+
+	return malloc_len
+}
+
+func linkFreeToAlloc(memEntries *MemEntrieByType) {
+
+	var freeTracker *MemEntryTracker
+
+	freeTracker = &memEntries.kfree
+	for _, mementry := range freeTracker.entries {
+		if mementry.ptr == 0 {
+			//kfree with zero is valid in kernel
+			continue
+		}
+		len := GetLenForKmallocAddr(memEntries, &memEntries.kmalloc, mementry)
+		if len == 0 {
+			len = GetLenForKmallocAddr(memEntries,
+						&memEntries.kmalloc_node, mementry)
+		} else {
+			mementry.length = len
+		}
+		if len != 0 {
+			mementry.length = len
+			freeTracker.size += len
+		}
+	}
+}
+
+func linkCacheFreeToAlloc(memEntries *MemEntrieByType) {
+
+	var freeTracker *MemEntryTracker
+
+	freeTracker = &memEntries.kmem_cache_free
+	for _, mementry := range freeTracker.entries {
+		if mementry.ptr == 0 {
+			//kfree with zero is valid in kernel
+			continue
+		}
+		len := GetLenForKmallocAddr(memEntries, &memEntries.kmem_cache_alloc, mementry)
+		if len != 0 {
+			mementry.length = len
+			freeTracker.size += len
+		}
+	}
+}
+
 func BuildMemEntries(trace_file string, pid int32) (*MemEntrieByType, error) {
 
 	var tracker *MemEntryTracker
 
 	memEntries := new(MemEntrieByType)
-	memEntries.kmalloc.name = "kmalloc"
-	memEntries.kmalloc_node.name = "kmalloc_node"
-	memEntries.kfree.name = "kfree"
-	memEntries.kmem_cache_alloc.name = "kmem_cache_alloc"
-	memEntries.kmem_cache_free.name = "kmem_cache_free"
+	IntMemTracker(&memEntries.kmalloc, "kmalloc")
+	IntMemTracker(&memEntries.kmalloc_node, "kmalloc_node")
+	IntMemTracker(&memEntries.kfree, "kfree")
+	IntMemTracker(&memEntries.kmem_cache_alloc, "kmem_cache_alloc")
+	IntMemTracker(&memEntries.kmem_cache_free, "kmem_cache_free")
 
 	file := FileObject{trace_file, nil}
 
@@ -229,11 +299,15 @@ func BuildMemEntries(trace_file string, pid int32) (*MemEntrieByType, error) {
 			tracker.count++
 			tracker.size += memEntry.length
 			tracker.entries = append(tracker.entries, memEntry)
-
+			if memEntry.ptr != 0 {
+				tracker.ptr_map[memEntry.ptr] =
+					append(tracker.ptr_map[memEntry.ptr], memEntry)
+			}
 		}
 	}
 
-	//linkFreeToAlloc(memEntries)
+	linkFreeToAlloc(memEntries)
+	linkCacheFreeToAlloc(memEntries)
 
 	return memEntries, nil
 }

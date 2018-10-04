@@ -28,7 +28,7 @@ func MapTraceToSymbol(tracker *MemEntryTracker, symbols *KernelSymbols) {
 }
 
 func printTrackerSummary(tracker *MemEntryTracker) {
-	fmt.Printf("%v done for size = %v, for %v times\n",
+	fmt.Printf("total %v size = %v, called %v times\n",
 		   tracker.name, tracker.size, tracker.count)
 }
 
@@ -87,7 +87,6 @@ func main() {
 		fmt.Printf("meme trneie")
 		return
 	}
-
 	newmap, err := GetLiveKernelSymbolMap(kernelfile)
 	if err != nil {
 		fmt.Printf("kernel")
@@ -109,7 +108,6 @@ func main() {
 		printForTracker(&memEntries.kfree, newmap)
 		printForTracker(&memEntries.kmem_cache_free, newmap)
 	}
-
 	printTrackerSummary(&memEntries.kmalloc)
 	printTrackerSummary(&memEntries.kmalloc_node)
 	printTrackerSummary(&memEntries.kmem_cache_alloc)
