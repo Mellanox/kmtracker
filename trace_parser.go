@@ -26,7 +26,7 @@ type MemEntry struct {
 type MemEntryTracker struct {
 	size    uint64
 	count   uint64
-	entries []MemEntry
+	entries []*MemEntry
 	name    string
 }
 
@@ -228,7 +228,7 @@ func BuildMemEntries(trace_file string, pid int32) (*MemEntrieByType, error) {
 		if tracker != nil {
 			tracker.count++
 			tracker.size += memEntry.length
-			tracker.entries = append(tracker.entries, *memEntry)
+			tracker.entries = append(tracker.entries, memEntry)
 
 		}
 	}
