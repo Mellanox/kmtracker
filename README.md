@@ -37,7 +37,8 @@ path to vmlinux: absolute path to vmlinux file. (vmlinuz is not sufficient).
 ## TODO
 (a) Cross reference free with alloc calls.
 
-(b) Print summary and statistics.
+(b) Track mm_alloc/mm_free calls.
+
 
 ## Authors
     Parav Pandit parav@mellanox.com
