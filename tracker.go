@@ -28,8 +28,8 @@ func MapTraceToSymbol(tracker *MemEntryTracker, symbols *KernelSymbols) {
 }
 
 func printTrackerSummary(tracker *MemEntryTracker) {
-	fmt.Printf("total %v size = %v, called %v times\n",
-		   tracker.name, tracker.size, tracker.count)
+	fmt.Printf("Total %v size = %v bytes, called %v times\n",
+		tracker.name, tracker.size, tracker.count)
 }
 
 func printForTracker(tracker *MemEntryTracker, symbols *KernelSymbols) {
@@ -52,7 +52,7 @@ func printForTracker(tracker *MemEntryTracker, symbols *KernelSymbols) {
 		}
 		if found == true {
 			fmt.Println(tracker.name, mementry.call_site_fn,
-				    mementry.length, mementry.index)
+				mementry.length, mementry.index)
 		}
 	}
 }
@@ -113,4 +113,8 @@ func main() {
 	printTrackerSummary(&memEntries.kmem_cache_alloc)
 	printTrackerSummary(&memEntries.kfree)
 	printTrackerSummary(&memEntries.kmem_cache_free)
+	fmt.Println("-------------------------------------------------")
+	fmt.Printf("Total alloc size = %v bytes\n", memEntries.allocSize)
+	fmt.Printf("Total free size = %v bytes\n", memEntries.freeSize)
+	fmt.Printf("Total kernel memory allocated = %v bytes\n", memEntries.allocSize - memEntries.freeSize)
 }
