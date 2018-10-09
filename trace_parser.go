@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -44,6 +45,9 @@ type MemEntrieByType struct {
 
 	allocSize uint64
 	freeSize  uint64
+
+	pageAllocSize uint64
+	pageFreeSize  uint64
 }
 
 func getpid(task_pid string) int32 {
@@ -116,7 +120,7 @@ func get_mm_alloc_bytes_from_line(words []string) (uint64, error) {
 	for _, word := range words {
 		value, err := get_mm_alloc_bytes(word)
 		if err == nil {
-			return (value + 1) * 4096, nil
+			return (value + 1) * uint64(os.Getpagesize()), nil
 		}
 	}
 	return 0, fmt.Errorf("not found")
@@ -175,8 +179,13 @@ func parseLine(line string, index int, search_pid int32) (*MemEntry, error) {
 			return nil, len_err
 		}
 		memEntry.length = length
-	} else if memEntry.call_type == "mm_page_alloc" ||
-		memEntry.call_type == "mm_page_alloc_zone_locked" {
+	} else if memEntry.call_type == "mm_page_alloc" {
+		length, len_err := get_mm_alloc_bytes_from_line(valid_kv)
+		if len_err != nil {
+			return nil, len_err
+		}
+		memEntry.length = length
+	} else if memEntry.call_type == "mm_page_free" {
 		length, len_err := get_mm_alloc_bytes_from_line(valid_kv)
 		if len_err != nil {
 			return nil, len_err
@@ -262,6 +271,8 @@ func BuildMemEntries(trace_file string, pid int32) (*MemEntrieByType, error) {
 	IntMemTracker(&memEntries.kfree, "kfree")
 	IntMemTracker(&memEntries.kmem_cache_alloc, "kmem_cache_alloc")
 	IntMemTracker(&memEntries.kmem_cache_free, "kmem_cache_free")
+	IntMemTracker(&memEntries.mm_page_alloc, "mm_page_alloc")
+	IntMemTracker(&memEntries.mm_page_free, "mm_page_free")
 
 	file := FileObject{trace_file, nil}
 
@@ -275,7 +286,6 @@ func BuildMemEntries(trace_file string, pid int32) (*MemEntrieByType, error) {
 	lines = lines[9:]
 
 	for i, line := range lines {
-
 		memEntry, err := parseLine(line, i, pid)
 		if err != nil {
 			continue
@@ -284,40 +294,47 @@ func BuildMemEntries(trace_file string, pid int32) (*MemEntrieByType, error) {
 		switch memEntry.call_type {
 		case "kmalloc":
 			tracker = &memEntries.kmalloc
-			break
 		case "kmalloc_node":
 			tracker = &memEntries.kmalloc_node
-			break
 		case "kfree":
 			tracker = &memEntries.kfree
-			break
 		case "kmem_cache_alloc":
 			tracker = &memEntries.kmem_cache_alloc
-			break
 		case "kmem_cache_free":
 			tracker = &memEntries.kmem_cache_free
-			break
+		case "mm_page_alloc":
+			tracker = &memEntries.mm_page_alloc
+		case "mm_page_free":
+			tracker = &memEntries.mm_page_free
 		default:
 			tracker = nil
 		}
-		if tracker != nil {
-			if memEntry.ptr != 0 {
+		if tracker == nil {
+			continue
+		}
+		if memEntry.ptr != 0 {
+			tracker.count++
+			tracker.size += memEntry.length
+			tracker.entries = append(tracker.entries, memEntry)
+			tracker.ptr_map[memEntry.ptr] =
+				append(tracker.ptr_map[memEntry.ptr], memEntry)
+			switch memEntry.call_type {
+			case "kmalloc":
+				memEntries.allocSize += memEntry.length
+			case "kmalloc_node":
+				memEntries.allocSize += memEntry.length
+			case "kmem_cache_alloc":
+				memEntries.allocSize += memEntry.length
+			}
+		} else {
+			if memEntry.call_type == "mm_page_alloc" {
 				tracker.count++
 				tracker.size += memEntry.length
-				tracker.entries = append(tracker.entries, memEntry)
-				tracker.ptr_map[memEntry.ptr] =
-					append(tracker.ptr_map[memEntry.ptr], memEntry)
-				switch memEntry.call_type {
-				case "kmalloc":
-					memEntries.allocSize += memEntry.length
-					break
-				case "kmalloc_node":
-					memEntries.allocSize += memEntry.length
-					break
-				case "kmem_cache_alloc":
-					memEntries.allocSize += memEntry.length
-					break
-				}
+				memEntries.pageAllocSize += memEntry.length
+			} else if memEntry.call_type == "mm_page_free" {
+				tracker.count++
+				tracker.size += memEntry.length
+				memEntries.pageFreeSize += memEntry.length
 			}
 		}
 	}

@@ -35,6 +35,9 @@ func printTrackerSummary(tracker *MemEntryTracker) {
 func printForTracker(tracker *MemEntryTracker, symbols *KernelSymbols) {
 	var found bool
 
+	if len(tracker.entries) != 0 {
+		fmt.Println("alloc_type, caller function, allocated_length(bytes), index_in_file\n")
+	}
 	for _, mementry := range tracker.entries {
 		found = false
 		for k, _ := range symbols.ModulesSymbols {
@@ -63,7 +66,7 @@ func main() {
 	var err error
 	var pid int
 
-	if len(os.Args) != 4 {
+	if len(os.Args) != 4 && len(os.Args) != 5 {
 		fmt.Println("Usage:")
 		fmt.Printf("%s trace_file pid_to_analyse vmlinux_file\n", os.Args[0])
 		return
@@ -113,8 +116,12 @@ func main() {
 	printTrackerSummary(&memEntries.kmem_cache_alloc)
 	printTrackerSummary(&memEntries.kfree)
 	printTrackerSummary(&memEntries.kmem_cache_free)
+	printTrackerSummary(&memEntries.mm_page_alloc)
+	printTrackerSummary(&memEntries.mm_page_free)
 	fmt.Println("-------------------------------------------------")
 	fmt.Printf("Total alloc size = %v bytes\n", memEntries.allocSize)
 	fmt.Printf("Total free size = %v bytes\n", memEntries.freeSize)
-	fmt.Printf("Total kernel memory allocated = %v bytes\n", memEntries.allocSize - memEntries.freeSize)
+	fmt.Printf("Total page memory alloc size = %v bytes\n", memEntries.pageAllocSize)
+	fmt.Printf("Total page memory free size = %v bytes\n", memEntries.pageFreeSize)
+	fmt.Printf("Total kernel memory allocated = %v bytes\n", memEntries.allocSize-memEntries.freeSize)
 }
