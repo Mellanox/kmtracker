@@ -32,34 +32,44 @@ func printTrackerSummary(tracker *MemEntryTracker) {
 		tracker.name, tracker.size, tracker.count)
 }
 
-func printForTracker(tracker *MemEntryTracker, symbols *KernelSymbols) {
-	var found bool
+func printPairs(tracker *MemEntryTracker) {
+	var freeTracker string
 
 	if len(tracker.entries) != 0 {
-		fmt.Println("alloc_type, caller function, allocated_length(bytes), index_in_file\n")
+		fmt.Println("alloc_type, caller function, allocated_length(bytes), index_in_file")
+	}
+	switch tracker.name {
+	case "kmalloc":
+		freeTracker = "kfree"
+	case "kmalloc_node":
+		freeTracker = "kfree"
+	case "kmem_cache_alloc":
+		freeTracker = "kmem_cache_free"
+	default:
+		freeTracker = "unknown"
+	}
+
+	for _, mementry := range tracker.entries {
+		if len(mementry.call_site_fn) != 0 && mementry.freeEntry != nil {
+			fmt.Println(tracker.name, mementry.call_site_fn,
+				mementry.length, mementry.index)
+			fmt.Printf("%v %v %v %v\n", freeTracker, mementry.freeEntry.call_site_fn,
+				mementry.freeEntry.length, mementry.freeEntry.index)
+		}
+	}
+}
+
+func printLoners(tracker *MemEntryTracker) {
+	if len(tracker.entries) != 0 {
+		fmt.Println("alloc_type, caller function, allocated_length(bytes), index_in_file")
 	}
 	for _, mementry := range tracker.entries {
-		found = false
-		for k, _ := range symbols.ModulesSymbols {
-			for _, sym := range symbols.ModulesSymbols[k].Symbols {
-				if mementry.call_site >= sym.StartAddress &&
-					mementry.call_site <= sym.EndAddress {
-					mementry.call_site_fn = sym.Name
-					found = true
-					break
-				}
-			}
-			if found == true {
-				break
-			}
-		}
-		if found == true {
+		if len(mementry.call_site_fn) != 0 && mementry.freeEntry == nil {
 			fmt.Println(tracker.name, mementry.call_site_fn,
 				mementry.length, mementry.index)
 		}
 	}
 }
-
 func main() {
 	var kernelfile string
 	var tracefile string
@@ -105,11 +115,14 @@ func main() {
 
 	if len(os.Args) > 4 && (os.Args[4] == "verbose" || os.Args[4] == "v" ||
 		os.Args[4] == "-v") {
-		printForTracker(&memEntries.kmalloc, newmap)
-		printForTracker(&memEntries.kmalloc_node, newmap)
-		printForTracker(&memEntries.kmem_cache_alloc, newmap)
-		printForTracker(&memEntries.kfree, newmap)
-		printForTracker(&memEntries.kmem_cache_free, newmap)
+		printPairs(&memEntries.kmalloc)
+		printPairs(&memEntries.kmalloc_node)
+		printPairs(&memEntries.kmem_cache_alloc)
+		printLoners(&memEntries.kmalloc)
+		printLoners(&memEntries.kmalloc_node)
+		printLoners(&memEntries.kmem_cache_alloc)
+		printLoners(&memEntries.kfree)
+		printLoners(&memEntries.kmem_cache_free)
 	}
 	printTrackerSummary(&memEntries.kmalloc)
 	printTrackerSummary(&memEntries.kmalloc_node)

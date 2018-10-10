@@ -210,8 +210,19 @@ func LinkFreeEntryToAlloc(memEntries *MemEntrieByType,
 	}
 
 	for i = 0; i < len(mallocTracker.ptr_map[freeEntry.ptr]); i++ {
+		if freeEntry.index <
+			mallocTracker.ptr_map[freeEntry.ptr][i].index {
+			// if the index of the kfree in the file is
+			// smaller than the index of allocated entry
+			// it means that we need to skip such free
+			// entry, because we are interested in finding
+			// match for kfree done after a previous kmalloc
+			// in a time scale
+			continue
+		}
 		malloc_len = mallocTracker.ptr_map[freeEntry.ptr][i].length
 		mallocTracker.ptr_map[freeEntry.ptr][i].freeEntry = freeEntry
+		freeEntry.freeEntry = mallocTracker.ptr_map[freeEntry.ptr][i]
 		break
 	}
 
@@ -253,7 +264,7 @@ func linkCacheFreeToAlloc(memEntries *MemEntrieByType) {
 			//kfree with zero is valid in kernel
 			continue
 		}
-		len := LinkFreeEntryToAlloc(memEntries,	&memEntries.kmem_cache_alloc, freeentry)
+		len := LinkFreeEntryToAlloc(memEntries, &memEntries.kmem_cache_alloc, freeentry)
 		if len != 0 {
 			freeentry.length = len
 			freeTracker.size += len
@@ -283,11 +294,12 @@ func BuildMemEntries(trace_file string, pid int32) (*MemEntrieByType, error) {
 		return nil, err
 	}
 	lines := strings.Split(data, "\n")
-	//skip first 9 lines
-	lines = lines[9:]
+	//skip first 11 lines
+	offset := 11
+	lines = lines[offset:]
 
 	for i, line := range lines {
-		memEntry, err := parseLine(line, i, pid)
+		memEntry, err := parseLine(line, i+offset+1, pid)
 		if err != nil {
 			continue
 		}
