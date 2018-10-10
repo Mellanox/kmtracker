@@ -20,8 +20,8 @@ type MemEntry struct {
 	// the one found for free.
 	index int
 
-	// pointer to malloced entry to link to
-	mallocEntry *MemEntry
+	// pointer to freed entry to link to
+	freeEntry *MemEntry
 }
 
 type MemEntryTracker struct {
@@ -200,17 +200,18 @@ func IntMemTracker(tracker *MemEntryTracker, name string) {
 	tracker.ptr_map = make(map[uint64][]*MemEntry)
 }
 
-func GetLenForKmallocAddr(memEntries *MemEntrieByType,
-	mallocTracker *MemEntryTracker, memEntry *MemEntry) uint64 {
+func LinkFreeEntryToAlloc(memEntries *MemEntrieByType,
+	mallocTracker *MemEntryTracker, freeEntry *MemEntry) uint64 {
 	var malloc_len uint64
 	var i int
 
-	if len(mallocTracker.ptr_map[memEntry.ptr]) == 0 {
+	if len(mallocTracker.ptr_map[freeEntry.ptr]) == 0 {
 		return 0
 	}
 
-	for i = 0; i < len(mallocTracker.ptr_map[memEntry.ptr]); i++ {
-		malloc_len = mallocTracker.ptr_map[memEntry.ptr][i].length
+	for i = 0; i < len(mallocTracker.ptr_map[freeEntry.ptr]); i++ {
+		malloc_len = mallocTracker.ptr_map[freeEntry.ptr][i].length
+		mallocTracker.ptr_map[freeEntry.ptr][i].freeEntry = freeEntry
 		break
 	}
 
@@ -222,20 +223,20 @@ func linkFreeToAlloc(memEntries *MemEntrieByType) {
 	var freeTracker *MemEntryTracker
 
 	freeTracker = &memEntries.kfree
-	for _, mementry := range freeTracker.entries {
-		if mementry.ptr == 0 {
+	for _, freeentry := range freeTracker.entries {
+		if freeentry.ptr == 0 {
 			//kfree with zero is valid in kernel
 			continue
 		}
-		len := GetLenForKmallocAddr(memEntries, &memEntries.kmalloc, mementry)
+		len := LinkFreeEntryToAlloc(memEntries, &memEntries.kmalloc, freeentry)
 		if len == 0 {
-			len = GetLenForKmallocAddr(memEntries,
-				&memEntries.kmalloc_node, mementry)
+			len = LinkFreeEntryToAlloc(memEntries,
+				&memEntries.kmalloc_node, freeentry)
 		} else {
-			mementry.length = len
+			freeentry.length = len
 		}
 		if len != 0 {
-			mementry.length = len
+			freeentry.length = len
 			freeTracker.size += len
 			memEntries.freeSize += len
 		}
@@ -247,14 +248,14 @@ func linkCacheFreeToAlloc(memEntries *MemEntrieByType) {
 	var freeTracker *MemEntryTracker
 
 	freeTracker = &memEntries.kmem_cache_free
-	for _, mementry := range freeTracker.entries {
-		if mementry.ptr == 0 {
+	for _, freeentry := range freeTracker.entries {
+		if freeentry.ptr == 0 {
 			//kfree with zero is valid in kernel
 			continue
 		}
-		len := GetLenForKmallocAddr(memEntries, &memEntries.kmem_cache_alloc, mementry)
+		len := LinkFreeEntryToAlloc(memEntries,	&memEntries.kmem_cache_alloc, freeentry)
 		if len != 0 {
-			mementry.length = len
+			freeentry.length = len
 			freeTracker.size += len
 			memEntries.freeSize += len
 		}
