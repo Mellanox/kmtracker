@@ -20,7 +20,7 @@ type MemEntry struct {
 
 	call_site   string
 	line_number int
-
+	line string
 	// pointer to freed entry to link to
 	freeEntry *MemEntry
 }
@@ -59,6 +59,18 @@ func get_uint64_value_of_key(kv string, key string, base int) (uint64, error) {
 		return 0, err2
 	}
 	return value, nil
+}
+
+func get_string_value_of_key(kv string, key string) (string, error) {
+	if strings.Contains(kv, key) == false {
+		return "", fmt.Errorf("invalid string", kv)
+	}
+
+	parts := strings.Split(kv, "=")
+	if len(parts) == 1 || len(parts[1]) == 0 {
+		return "", fmt.Errorf("null value")
+	}
+	return parts[1], nil
 }
 
 func get_mm_order(possible_kv string) (uint64, error) {
@@ -119,6 +131,11 @@ func decode_alloc(entry *MemEntry, valid_kv []string) error {
 	if alloc_err != nil {
 		return alloc_err
 	}
+	value, call_err := get_string_value_of_key(valid_kv[1], "call_site=")
+	if call_err != nil {
+		return call_err
+	}
+	entry.call_site = value
 	entry.ptr = mem_ptr
 	entry.bytes_requested = bytes_req
 	entry.bytes_allocated = bytes_alloc
@@ -130,6 +147,11 @@ func decode_free(entry *MemEntry, valid_kv []string) error {
 	if err != nil {
 		return err
 	}
+	value, call_err := get_string_value_of_key(valid_kv[1], "call_site=")
+	if call_err != nil {
+		return call_err
+	}
+	entry.call_site = value
 	entry.ptr = free_ptr
 	return nil
 }
@@ -162,6 +184,7 @@ func parseLine(line string, line_number int) (*MemEntry, error) {
 
 	memEntry := new(MemEntry)
 	memEntry.line_number = line_number
+	memEntry.line = line
 	memEntry.call_type = strings.TrimRight(valid_kv[0], ":")
 	//fmt.Printf("%s ", memEntry.call_type)
 
@@ -189,7 +212,7 @@ func order_to_bytes(order uint64) uint64 {
 	return (order + 1) * 4096
 }
 
-func parse_mm_entries(trace_file string) {
+func parse_mm_entries(trace_file string, verbose bool) {
 	pfn_tracker := new(PfnTracker)
 	pfn_tracker.pfnmap = make(map[uint64]*MemEntry)
 
@@ -243,4 +266,13 @@ func parse_mm_entries(trace_file string) {
 		kmem_tracker.alloc_bytes/1024, kmem_tracker.alloc_bytes/(1024*1024))
 	fmt.Printf("kmem free bytes = %d = %d Kbytes = %d Mbytes\n", kmem_tracker.free_bytes,
 		kmem_tracker.free_bytes/1024, kmem_tracker.free_bytes/(1024*1024))
+
+	if verbose {
+		for _, element := range kmem_tracker.kmemmap {
+			if element == nil {
+				continue
+			}
+			fmt.Printf("%v\n", element.line)
+		}
+	}
 }

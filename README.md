@@ -46,6 +46,11 @@ go build .
 ./mm_tracker <trace_file_name>
 ```
 
+For running as verbose mode.
+```
+./mm_tracker <trace_file_name> -v
+```
+
 ## TODO
 (a) Cross reference free with alloc calls.
 
