@@ -20,7 +20,7 @@ type MemEntry struct {
 
 	call_site   string
 	line_number int
-	line string
+	line        string
 	// pointer to freed entry to link to
 	freeEntry *MemEntry
 }
@@ -212,7 +212,7 @@ func order_to_bytes(order uint64) uint64 {
 	return (order + 1) * 4096
 }
 
-func parse_mm_entries(trace_file string, verbose bool) {
+func parse_mm_entries(trace_file string, verbose bool) (*KmemTracker, *PfnTracker) {
 	pfn_tracker := new(PfnTracker)
 	pfn_tracker.pfnmap = make(map[uint64]*MemEntry)
 
@@ -221,7 +221,7 @@ func parse_mm_entries(trace_file string, verbose bool) {
 
 	data, err := ioutil.ReadFile(trace_file)
 	if err != nil {
-		return
+		return nil, nil
 	}
 
 	lines := strings.Split(string(data), "\n")
@@ -274,5 +274,12 @@ func parse_mm_entries(trace_file string, verbose bool) {
 			}
 			fmt.Printf("%v\n", element.line)
 		}
+		for _, element := range pfn_tracker.pfnmap {
+			if element == nil {
+				continue
+			}
+			fmt.Printf("%v\n", element.line)
+		}
 	}
+	return kmem_tracker, pfn_tracker
 }
