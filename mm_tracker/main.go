@@ -41,6 +41,8 @@ func main() {
 			fmt.Printf("Error parsing kernel vmlinux %v", kernelfile)
 			return
 		}
-		ksyms.tree.BstTreePrint()
+		if verbose == true {
+			ksyms.tree.BstTreePrint()
+		}
 	}
 }
