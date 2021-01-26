@@ -268,18 +268,26 @@ func parse_mm_entries(trace_file string, verbose bool) (*KmemTracker, *PfnTracke
 		kmem_tracker.free_bytes/1024, kmem_tracker.free_bytes/(1024*1024))
 
 	if verbose {
+		var bytes_not_freed uint64
+
 		for _, element := range kmem_tracker.kmemmap {
 			if element == nil {
 				continue
 			}
+			bytes_not_freed += element.bytes_allocated
 			fmt.Printf("%v\n", element.line)
 		}
+		fmt.Printf("kmem bytes not freed = %v\n", bytes_not_freed);
+
+		bytes_not_freed = 0
 		for _, element := range pfn_tracker.pfnmap {
 			if element == nil {
 				continue
 			}
+			bytes_not_freed += element.bytes_allocated
 			fmt.Printf("%v\n", element.line)
 		}
+		fmt.Printf("pages bytes not freed = %v\n", bytes_not_freed);
 	}
 	return kmem_tracker, pfn_tracker
 }
